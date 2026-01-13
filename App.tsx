@@ -14,7 +14,6 @@ const App: React.FC = () => {
   const [summary, setSummary] = useState<LectureSummary | null>(null);
   const [timer, setTimer] = useState(0);
   const [isExporting, setIsExporting] = useState<string | null>(null);
-  const [currentMimeType, setCurrentMimeType] = useState<string>('audio/webm');
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -45,30 +44,26 @@ const App: React.FC = () => {
           if (typeof result === 'string') {
             resolve(result.split(',')[1]);
           } else {
-            reject(new Error("파일 읽기 실패"));
+            reject(new Error("파일 데이터를 읽는 데 실패했습니다."));
           }
         };
-        reader.onerror = reject;
+        reader.onerror = () => reject(new Error("파일 로드 중 오류 발생"));
         reader.readAsDataURL(audioBlob);
       });
-      const base64Audio = await base64Promise;
       
-      // 전달받은 Blob의 실제 타입을 사용하거나 기본값 사용
-      const mimeToUse = audioBlob.type || currentMimeType || "audio/webm";
-      const text = await transcribeAudioPart(base64Audio, mimeToUse);
+      const base64Audio = await base64Promise;
+      // 브라우저의 MIME 타입이 비어있을 경우 기본값 지정
+      const mimeType = audioBlob.type || 'audio/webm';
+      
+      const text = await transcribeAudioPart(base64Audio, mimeType);
       setTranscription(text);
       
-      if (text && text.trim().length > 0) {
-        const aiSummary = await summarizeLecture(text);
-        setSummary(aiSummary);
-        setStatus(RecordingStatus.FINISHED);
-      } else {
-        alert("음성이 인식되지 않았습니다. 녹음 상태를 확인하거나 조금 더 긴 파일을 업로드해주세요.");
-        setStatus(RecordingStatus.IDLE);
-      }
+      const aiSummary = await summarizeLecture(text);
+      setSummary(aiSummary);
+      setStatus(RecordingStatus.FINISHED);
     } catch (error: any) {
-      console.error("AI Error:", error);
-      alert(`분석 중 오류가 발생했습니다: ${error.message || '네트워크 상태를 확인해주세요.'}`);
+      console.error("Process Audio Error:", error);
+      alert(`AI 분석 오류: ${error.message || "분석 중 예기치 못한 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."}`);
       setStatus(RecordingStatus.IDLE);
     }
   };
@@ -77,13 +72,9 @@ const App: React.FC = () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm') 
-        ? 'audio/webm' 
-        : MediaRecorder.isTypeSupported('audio/ogg') 
-          ? 'audio/ogg' 
-          : 'audio/mp4';
+      const types = ['audio/webm', 'audio/ogg', 'audio/mp4'];
+      const mimeType = types.find(type => MediaRecorder.isTypeSupported(type)) || 'audio/webm';
 
-      setCurrentMimeType(mimeType);
       const recorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = recorder;
       audioChunksRef.current = [];
@@ -101,7 +92,7 @@ const App: React.FC = () => {
       setStatus(RecordingStatus.RECORDING);
     } catch (e) {
       console.error("Mic error:", e);
-      alert("마이크 사용 권한이 필요합니다.");
+      alert("마이크 접근 권한이 없거나 장치가 연결되어 있지 않습니다.");
     }
   };
 
@@ -125,7 +116,7 @@ const App: React.FC = () => {
       pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
       pdf.save(`${summary?.topic || '강의요약'}.pdf`);
     } catch (e) {
-      alert("PDF 저장 실패");
+      alert("PDF 저장 중 오류가 발생했습니다.");
     }
     setIsExporting(null);
   };
@@ -158,7 +149,7 @@ const App: React.FC = () => {
         link.click();
       }
     } catch (e) {
-      alert("Word 저장 실패");
+      alert("Word 저장 중 오류가 발생했습니다.");
     }
     setIsExporting(null);
   };
@@ -166,19 +157,19 @@ const App: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto px-4 py-12">
       <header className="text-center mb-12">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-600 text-white mb-4 shadow-lg">
-          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+        <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-indigo-600 text-white mb-6 shadow-xl">
+          <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
         </div>
-        <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">Lecture Lens</h1>
-        <p className="mt-2 text-slate-500 text-lg font-medium">AI가 실시간 번역하고 요약하는 스마트 강의 노트</p>
+        <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-3">Lecture Lens</h1>
+        <p className="text-slate-500 text-lg font-medium">글로벌 강의도 한국어로 바로 번역하고 요약하세요</p>
       </header>
 
       <main className="min-h-[400px]">
         {status === RecordingStatus.IDLE && (
-          <div className="bg-white rounded-3xl p-10 shadow-sm border border-slate-200 text-center flex flex-col md:flex-row gap-8 justify-center items-center">
+          <div className="bg-white rounded-[2rem] p-12 shadow-xl border border-slate-100 text-center flex flex-col md:flex-row gap-8 justify-center items-center">
             <button onClick={startRecording} className="w-full md:w-64 flex flex-col items-center gap-4 p-8 rounded-2xl bg-indigo-50 hover:bg-indigo-100 transition-all border border-indigo-100 active:scale-95">
               <div className="w-16 h-16 bg-indigo-600 text-white rounded-full flex items-center justify-center text-2xl shadow-lg">🎤</div>
-              <div className="font-bold text-slate-800">녹음 시작</div>
+              <div className="font-bold text-slate-800">강의 녹음 시작</div>
             </button>
             <div className="w-full md:w-64 flex flex-col items-center gap-4 p-8 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-all border border-slate-100 cursor-pointer active:scale-95" onClick={() => fileInputRef.current?.click()}>
               <input type="file" ref={fileInputRef} onChange={(e) => {
@@ -186,32 +177,32 @@ const App: React.FC = () => {
                 if (file) processAudio(file);
               }} accept="audio/*" className="hidden" />
               <div className="w-16 h-16 bg-slate-600 text-white rounded-full flex items-center justify-center text-2xl shadow-lg">📁</div>
-              <div className="font-bold text-slate-800">파일 업로드</div>
+              <div className="font-bold text-slate-800">오디오 파일 업로드</div>
             </div>
           </div>
         )}
 
         {status === RecordingStatus.RECORDING && (
-          <div className="bg-white rounded-3xl p-16 shadow-inner border border-slate-200 text-center">
+          <div className="bg-white rounded-[2rem] p-16 shadow-inner border border-slate-200 text-center animate-pulse">
             <div className="w-4 h-4 bg-red-500 rounded-full recording-pulse mx-auto mb-6"></div>
-            <div className="text-6xl font-mono font-bold text-slate-800 mb-10 tabular-nums">{formatTime(timer)}</div>
-            <button onClick={() => { if(confirm("녹음을 중단하고 한국어로 요약할까요?")) stopRecording(); }} className="bg-slate-900 text-white px-10 py-4 rounded-full font-bold text-lg hover:bg-slate-800 transition shadow-xl active:scale-95">
+            <div className="text-6xl font-mono font-bold text-slate-800 mb-10">{formatTime(timer)}</div>
+            <button onClick={() => { if(confirm("녹음을 종료하고 한국어로 분석할까요?")) stopRecording(); }} className="bg-slate-900 text-white px-10 py-4 rounded-full font-bold text-lg hover:bg-slate-800 transition shadow-xl active:scale-95">
               중단 및 요약 실행
             </button>
           </div>
         )}
 
         {status === RecordingStatus.PROCESSING && (
-          <div className="text-center py-24 bg-white rounded-3xl border border-slate-200 shadow-sm">
+          <div className="text-center py-24 bg-white rounded-[2rem] border border-slate-200 shadow-sm">
             <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
-            <p className="text-2xl font-bold text-indigo-600 animate-pulse">Gemini AI가 분석 및 번역 중...</p>
-            <p className="text-slate-400 mt-2 italic">외국어 강의인 경우 한국어로 변환하여 정리합니다.</p>
+            <p className="text-2xl font-bold text-indigo-600 animate-pulse">Gemini AI 분석 중...</p>
+            <p className="text-slate-400 mt-2 italic">외국어 강의라면 한국어로 변환하여 정리 중입니다.</p>
           </div>
         )}
 
         {status === RecordingStatus.FINISHED && summary && (
           <div className="space-y-8 animate-in fade-in duration-700">
-            <div className="flex flex-wrap gap-3 justify-center sticky top-4 z-20 bg-slate-50/90 backdrop-blur-md py-4 rounded-2xl border border-slate-200 px-4 shadow-sm">
+            <div className="flex flex-wrap gap-3 justify-center sticky top-4 z-20 bg-slate-50/80 backdrop-blur-md py-4 rounded-2xl border border-slate-200 px-4">
               <button onClick={handleDownloadPDF} disabled={!!isExporting} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-indigo-700 transition">
                 {isExporting === 'pdf' ? '생성 중...' : 'PDF 저장'}
               </button>
@@ -219,14 +210,14 @@ const App: React.FC = () => {
                 Word 저장
               </button>
               <button onClick={() => { setSummary(null); setStatus(RecordingStatus.IDLE); }} className="bg-slate-200 text-slate-700 px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-300 transition">
-                새 기록
+                새로 만들기
               </button>
             </div>
             <SummaryCard summary={summary} />
             {transcription && (
               <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
-                <h3 className="text-sm font-bold text-slate-400 mb-2">추출된 텍스트 (한국어 번역본)</h3>
-                <div className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                <h3 className="text-sm font-bold text-slate-400 mb-2">한국어 번역 텍스트 (받아쓰기)</h3>
+                <div className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto pr-2">
                   {transcription}
                 </div>
               </div>
