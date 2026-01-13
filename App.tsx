@@ -6,7 +6,7 @@ import SummaryCard from './components/SummaryCard';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import * as docx from 'docx';
-import * as FileSaver from 'file-saver';
+import FileSaver from 'file-saver';
 
 const App: React.FC = () => {
   const [status, setStatus] = useState<RecordingStatus>(RecordingStatus.IDLE);
@@ -142,8 +142,19 @@ const App: React.FC = () => {
         }]
       });
       const blob = await docx.Packer.toBlob(doc);
-      // use FileSaver.saveAs instead of direct saveAs to be safe
-      FileSaver.saveAs(blob, `${summary.topic || 'lecture'}_summary.docx`);
+      // esm.sh bundle version can sometimes expose saveAs differently
+      if (typeof FileSaver === 'function') {
+        (FileSaver as any)(blob, `${summary.topic || 'lecture'}_summary.docx`);
+      } else if (FileSaver && (FileSaver as any).saveAs) {
+        (FileSaver as any).saveAs(blob, `${summary.topic || 'lecture'}_summary.docx`);
+      } else {
+        // Fallback for browsers
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${summary.topic || 'lecture'}_summary.docx`;
+        a.click();
+      }
     } catch (e) {
       console.error("Docs fail", e);
       alert("Word 저장 중 오류가 발생했습니다.");
