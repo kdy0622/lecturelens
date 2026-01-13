@@ -6,7 +6,6 @@ import SummaryCard from './components/SummaryCard';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import * as docx from 'docx';
-// file-saver의 ESM 문제를 피하기 위해 전체를 가져옵니다.
 import * as FileSaverNamespace from 'file-saver';
 
 const App: React.FC = () => {
@@ -61,12 +60,12 @@ const App: React.FC = () => {
         setSummary(aiSummary);
         setStatus(RecordingStatus.FINISHED);
       } else {
-        alert("음성이 감지되지 않았거나 변환에 실패했습니다.");
+        alert("음성이 인식되지 않았습니다. 녹음 상태를 확인하거나 조금 더 긴 파일을 업로드해주세요.");
         setStatus(RecordingStatus.IDLE);
       }
     } catch (error: any) {
-      console.error("Error:", error);
-      alert("AI 분석 중 오류가 발생했습니다.");
+      console.error("AI Error:", error);
+      alert(`오류가 발생했습니다: ${error.message || '분석 중 문제 발생'}`);
       setStatus(RecordingStatus.IDLE);
     }
   };
@@ -74,7 +73,15 @@ const App: React.FC = () => {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      
+      // 브라우저 호환성을 위해 지원되는 타입을 체크합니다.
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm') 
+        ? 'audio/webm' 
+        : MediaRecorder.isTypeSupported('audio/ogg') 
+          ? 'audio/ogg' 
+          : 'audio/mp4';
+
+      const recorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = recorder;
       audioChunksRef.current = [];
       
@@ -83,14 +90,15 @@ const App: React.FC = () => {
       };
       
       recorder.onstop = () => {
-        const finalBlob = new Blob(audioChunksRef.current, { type: 'audio/mp3' });
+        const finalBlob = new Blob(audioChunksRef.current, { type: mimeType });
         processAudio(finalBlob);
       };
       
       recorder.start();
       setStatus(RecordingStatus.RECORDING);
     } catch (e) {
-      alert("마이크 사용 권한을 허용해주세요.");
+      console.error("Mic error:", e);
+      alert("마이크 사용 권한을 허용해주시거나, 마이크 연결을 확인해주세요.");
     }
   };
 
@@ -104,7 +112,6 @@ const App: React.FC = () => {
   const handleDownloadPDF = async () => {
     const element = document.getElementById('summary-content');
     if (!element) return;
-    
     setIsExporting('pdf');
     try {
       const canvas = await html2canvas(element, { scale: 2 });
@@ -128,19 +135,16 @@ const App: React.FC = () => {
         sections: [{
           children: [
             new docx.Paragraph({ text: summary.topic, heading: docx.HeadingLevel.HEADING_1, alignment: docx.AlignmentType.CENTER }),
-            new docx.Paragraph({ text: "핵심 요약", heading: docx.HeadingLevel.HEADING_2 }),
+            new docx.Paragraph({ text: "핵심 요약", heading: docx.HeadingLevel.HEADING_2, spacing: { before: 400 } }),
             ...summary.mainPoints.flatMap(p => [
-              new docx.Paragraph({ text: p.title, heading: docx.HeadingLevel.HEADING_3 }),
+              new docx.Paragraph({ text: p.title, heading: docx.HeadingLevel.HEADING_3, spacing: { before: 200 } }),
               ...p.details.map(d => new docx.Paragraph({ text: `- ${d}` }))
             ])
           ]
         }]
       });
       const blob = await docx.Packer.toBlob(doc);
-      
-      // FileSaver를 가장 안전한 방식으로 호출하거나 폴백 사용
       const saveAs = (FileSaverNamespace as any).saveAs || (FileSaverNamespace as any).default?.saveAs;
-      
       if (saveAs) {
         saveAs(blob, `${summary.topic || '강의요약'}.docx`);
       } else {
@@ -149,7 +153,6 @@ const App: React.FC = () => {
         link.href = url;
         link.download = `${summary.topic || '강의요약'}.docx`;
         link.click();
-        URL.revokeObjectURL(url);
       }
     } catch (e) {
       alert("Word 저장 실패");
@@ -164,7 +167,7 @@ const App: React.FC = () => {
           <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
         </div>
         <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">Lecture Lens</h1>
-        <p className="mt-2 text-slate-500 text-lg font-medium">AI가 요약하는 스마트 강의 노트</p>
+        <p className="mt-2 text-slate-500 text-lg font-medium">AI가 요약하고 번역하는 스마트 강의 노트</p>
       </header>
 
       <main className="min-h-[400px]">
@@ -189,8 +192,8 @@ const App: React.FC = () => {
           <div className="bg-white rounded-3xl p-16 shadow-inner border border-slate-200 text-center">
             <div className="w-4 h-4 bg-red-500 rounded-full recording-pulse mx-auto mb-6"></div>
             <div className="text-6xl font-mono font-bold text-slate-800 mb-10 tabular-nums">{formatTime(timer)}</div>
-            <button onClick={() => { if(confirm("녹음을 중단하고 분석할까요?")) stopRecording(); }} className="bg-slate-900 text-white px-10 py-4 rounded-full font-bold text-lg hover:bg-slate-800 transition shadow-xl active:scale-95">
-              중단 및 AI 요약
+            <button onClick={() => { if(confirm("녹음을 중단하고 한국어로 분석을 시작할까요?")) stopRecording(); }} className="bg-slate-900 text-white px-10 py-4 rounded-full font-bold text-lg hover:bg-slate-800 transition shadow-xl active:scale-95">
+              중단 및 요약 실행
             </button>
           </div>
         )}
@@ -198,24 +201,31 @@ const App: React.FC = () => {
         {status === RecordingStatus.PROCESSING && (
           <div className="text-center py-24 bg-white rounded-3xl border border-slate-200 shadow-sm">
             <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
-            <p className="text-2xl font-bold text-indigo-600 animate-pulse">Gemini AI 분석 중...</p>
+            <p className="text-2xl font-bold text-indigo-600 animate-pulse">Gemini AI가 분석 및 번역 중...</p>
+            <p className="text-slate-400 mt-2">외국어인 경우 한국어로 번역하고 있습니다.</p>
           </div>
         )}
 
         {status === RecordingStatus.FINISHED && summary && (
           <div className="space-y-8 animate-in fade-in duration-700">
             <div className="flex flex-wrap gap-3 justify-center sticky top-4 z-20 bg-slate-50/90 backdrop-blur-md py-4 rounded-2xl border border-slate-200 px-4 shadow-sm">
-              <button onClick={handleDownloadPDF} disabled={!!isExporting} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-indigo-700 transition active:scale-95">
-                {isExporting === 'pdf' ? '생성 중...' : 'PDF 저장'}
+              <button onClick={handleDownloadPDF} disabled={!!isExporting} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-indigo-700 transition">
+                PDF 저장
               </button>
-              <button onClick={handleDownloadDocs} disabled={!!isExporting} className="bg-white border border-slate-200 text-slate-700 px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-100 transition active:scale-95">
+              <button onClick={handleDownloadDocs} disabled={!!isExporting} className="bg-white border border-slate-200 text-slate-700 px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-100 transition">
                 Word 저장
               </button>
-              <button onClick={() => { setSummary(null); setStatus(RecordingStatus.IDLE); }} className="bg-slate-200 text-slate-700 px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-300 transition active:scale-95">
-                새 강의 기록
+              <button onClick={() => { setSummary(null); setStatus(RecordingStatus.IDLE); }} className="bg-slate-200 text-slate-700 px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-300 transition">
+                새 기록
               </button>
             </div>
             <SummaryCard summary={summary} />
+            {transcription && (
+              <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-400 mb-2">원문/번역 텍스트</h3>
+                <p className="text-slate-600 text-sm whitespace-pre-wrap">{transcription}</p>
+              </div>
+            )}
           </div>
         )}
       </main>
