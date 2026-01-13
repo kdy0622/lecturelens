@@ -6,7 +6,7 @@ import SummaryCard from './components/SummaryCard';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import * as docx from 'docx';
-import { saveAs } from 'file-saver';
+import * as FileSaver from 'file-saver';
 
 const App: React.FC = () => {
   const [status, setStatus] = useState<RecordingStatus>(RecordingStatus.IDLE);
@@ -60,12 +60,12 @@ const App: React.FC = () => {
         setSummary(aiSummary);
         setStatus(RecordingStatus.FINISHED);
       } else {
-        alert("음성을 텍스트로 변환하지 못했습니다. 다시 시도해 주세요.");
+        alert("음성을 텍스트로 변환하지 못했습니다. 오디오 상태를 확인해 주세요.");
         setStatus(RecordingStatus.IDLE);
       }
     } catch (error: any) {
       console.error("Process error:", error);
-      alert("분석 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+      alert("AI 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
       setStatus(RecordingStatus.IDLE);
     }
   };
@@ -90,7 +90,7 @@ const App: React.FC = () => {
       setStatus(RecordingStatus.RECORDING);
     } catch (e) {
       console.error("Mic error:", e);
-      alert("마이크 사용 권한이 거부되었습니다. 브라우저 설정에서 권한을 허용해 주세요.");
+      alert("마이크 사용 권한이 필요합니다.");
     }
   };
 
@@ -117,10 +117,10 @@ const App: React.FC = () => {
       const imgWidth = 190;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
-      pdf.save(`${summary?.topic || 'lecture'}_요약.pdf`);
+      pdf.save(`${summary?.topic || 'lecture'}_summary.pdf`);
     } catch (e) {
       console.error("PDF fail", e);
-      alert("PDF 저장에 실패했습니다.");
+      alert("PDF 저장 중 오류가 발생했습니다.");
     }
     setIsExporting(null);
   };
@@ -142,10 +142,11 @@ const App: React.FC = () => {
         }]
       });
       const blob = await docx.Packer.toBlob(doc);
-      saveAs(blob, `${summary.topic || 'lecture'}_요약.docx`);
+      // use FileSaver.saveAs instead of direct saveAs to be safe
+      FileSaver.saveAs(blob, `${summary.topic || 'lecture'}_summary.docx`);
     } catch (e) {
       console.error("Docs fail", e);
-      alert("Word 저장에 실패했습니다.");
+      alert("Word 저장 중 오류가 발생했습니다.");
     }
     setIsExporting(null);
   };
@@ -158,18 +159,18 @@ const App: React.FC = () => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
           </svg>
         </div>
-        <h1 className="text-4xl font-extrabold text-slate-900">Lecture Lens</h1>
-        <p className="mt-2 text-slate-500 text-lg">AI가 실시간으로 강의를 분석하고 요약합니다.</p>
+        <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">Lecture Lens</h1>
+        <p className="mt-2 text-slate-500 text-lg font-medium">AI 강의 녹음 및 스마트 요약 도구</p>
       </header>
 
       <main className="min-h-[400px]">
         {status === RecordingStatus.IDLE && (
           <div className="bg-white rounded-3xl p-10 shadow-sm border border-slate-200 text-center flex flex-col md:flex-row gap-8 justify-center items-center">
-            <button onClick={startRecording} className="w-full md:w-64 flex flex-col items-center gap-4 p-8 rounded-2xl bg-indigo-50 hover:bg-indigo-100 transition-all border border-indigo-100">
+            <button onClick={startRecording} className="w-full md:w-64 flex flex-col items-center gap-4 p-8 rounded-2xl bg-indigo-50 hover:bg-indigo-100 transition-all border border-indigo-100 active:scale-95">
               <div className="w-16 h-16 bg-indigo-600 text-white rounded-full flex items-center justify-center text-2xl shadow-lg">🎤</div>
               <div className="font-bold text-slate-800">녹음 시작</div>
             </button>
-            <div className="w-full md:w-64 flex flex-col items-center gap-4 p-8 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-all border border-slate-100 cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+            <div className="w-full md:w-64 flex flex-col items-center gap-4 p-8 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-all border border-slate-100 cursor-pointer active:scale-95" onClick={() => fileInputRef.current?.click()}>
               <input type="file" ref={fileInputRef} onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) processAudio(file);
@@ -184,39 +185,43 @@ const App: React.FC = () => {
           <div className="bg-white rounded-3xl p-16 shadow-inner border border-slate-200 text-center">
             <div className="w-4 h-4 bg-red-500 rounded-full recording-pulse mx-auto mb-6"></div>
             <div className="text-6xl font-mono font-bold text-slate-800 mb-10 tabular-nums">{formatTime(timer)}</div>
-            <button onClick={() => { if(window.confirm("녹음을 중단하고 분석할까요?")) stopRecording(); }} className="bg-slate-900 text-white px-10 py-4 rounded-full font-bold text-lg hover:bg-slate-800 transition shadow-xl">
+            <button onClick={() => { if(window.confirm("녹음을 중단하고 AI 요약을 시작할까요?")) stopRecording(); }} className="bg-slate-900 text-white px-10 py-4 rounded-full font-bold text-lg hover:bg-slate-800 transition shadow-xl active:scale-95">
               중단 및 AI 요약
             </button>
           </div>
         )}
 
         {status === RecordingStatus.PROCESSING && (
-          <div className="text-center py-24 bg-white rounded-3xl border border-slate-200">
+          <div className="text-center py-24 bg-white rounded-3xl border border-slate-200 shadow-sm">
             <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
-            <p className="text-2xl font-bold text-indigo-600 animate-pulse">Gemini AI가 분석 중입니다...</p>
+            <p className="text-2xl font-bold text-indigo-600 animate-pulse">Gemini AI가 강의를 분석 중입니다...</p>
+            <p className="text-slate-400 mt-2">잠시만 기다려 주세요.</p>
           </div>
         )}
 
         {status === RecordingStatus.FINISHED && summary && (
           <div className="space-y-8 animate-in fade-in duration-700">
-            <div className="flex flex-wrap gap-3 justify-center sticky top-4 z-10 bg-slate-50/90 backdrop-blur-md py-4 rounded-2xl border border-slate-200 px-4 shadow-sm">
-              <button onClick={handleDownloadPDF} disabled={!!isExporting} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition">
-                {isExporting === 'pdf' ? '생성 중...' : 'PDF 저장'}
+            <div className="flex flex-wrap gap-3 justify-center sticky top-4 z-20 bg-slate-50/90 backdrop-blur-md py-4 rounded-2xl border border-slate-200 px-4 shadow-sm">
+              <button onClick={handleDownloadPDF} disabled={!!isExporting} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition active:scale-95">
+                {isExporting === 'pdf' ? 'PDF 생성 중...' : 'PDF 저장'}
               </button>
-              <button onClick={handleDownloadDocs} disabled={!!isExporting} className="bg-white border border-slate-200 text-slate-700 px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-100 transition">
+              <button onClick={handleDownloadDocs} disabled={!!isExporting} className="bg-white border border-slate-200 text-slate-700 px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-100 transition active:scale-95">
                 Word 저장
               </button>
-              <button onClick={() => { setSummary(null); setStatus(RecordingStatus.IDLE); }} className="bg-slate-200 text-slate-700 px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-300 transition">
-                새로 기록
+              <button onClick={() => { setSummary(null); setStatus(RecordingStatus.IDLE); }} className="bg-slate-200 text-slate-700 px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-300 transition active:scale-95">
+                새 강의 기록
               </button>
             </div>
 
             <SummaryCard summary={summary} />
 
             {transcription && (
-              <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm">
-                <h3 className="text-lg font-bold text-slate-800 mb-4">받아쓰기 전문</h3>
-                <div className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap max-h-96 overflow-y-auto">
+              <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm mb-12">
+                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h7"></path></svg>
+                  받아쓰기 전문
+                </h3>
+                <div className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap max-h-96 overflow-y-auto pr-4 scrollbar-thin">
                   {transcription}
                 </div>
               </div>
