@@ -2,9 +2,14 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { LectureSummary } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+/**
+ * We create a new GoogleGenAI instance on every call to ensure it uses
+ * the most up-to-date API_KEY from the environment/dialog.
+ */
 
 export const summarizeLecture = async (transcription: string): Promise<LectureSummary> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: `다음 강의 녹취록을 분석하여 구조화된 JSON 형식으로 요약해줘.
@@ -43,19 +48,23 @@ export const summarizeLecture = async (transcription: string): Promise<LectureSu
           keywords: { type: Type.ARRAY, items: { type: Type.STRING } },
           actionItems: { type: Type.ARRAY, items: { type: Type.STRING } }
         },
-        required: ["topic", "mainPoints", "insights", "keywords", "actionItems"]
+        required: ["topic", "mainPoints", "insights", "keywords", "actionItems"],
+        propertyOrdering: ["topic", "mainPoints", "insights", "keywords", "actionItems"]
       }
     }
   });
 
   try {
-    return JSON.parse(response.text || '{}') as LectureSummary;
+    const text = response.text;
+    return JSON.parse(text || '{}') as LectureSummary;
   } catch (e) {
     throw new Error("AI 응답 파싱 실패");
   }
 };
 
 export const transcribeAudioPart = async (base64Audio: string): Promise<string> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: {

@@ -28,3 +28,14 @@ export interface TranscriptionChunk {
   timestamp: string;
   text: string;
 }
+
+/**
+ * Kakao SDK Global Type Definitions
+ */
+declare global {
+  interface Window {
+    Kakao: any;
+  }
+}
+
+export {};
