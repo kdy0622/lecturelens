@@ -124,13 +124,14 @@ const App: React.FC = () => {
       // 캡처 전 스크롤 위치를 상단으로 이동하여 전체 내용 캡처 보장
       window.scrollTo(0, 0);
       
+      // html2canvas가 숨겨진 요소나 잘린 영역까지 캡처하도록 설정
       const canvas = await html2canvas(element, { 
         scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
-        windowHeight: element.scrollHeight,
-        scrollY: -window.scrollY
+        height: element.scrollHeight,
+        windowHeight: element.scrollHeight
       });
 
       const imgData = canvas.toDataURL('image/png');
@@ -288,7 +289,7 @@ const App: React.FC = () => {
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 3.185-9 7.115 0 2.557 1.707 4.8 4.34 6.111l-.85 3.122c-.113.417.155.833.58.833.154 0 .31-.047.445-.142l3.626-2.426c.28.03.565.047.859.047 4.97 0 9-3.185 9-7.115S16.97 3 12 3z"></path></svg>
               카톡 공유
             </button>
-            <button onClick={() => setStatus(RecordingStatus.IDLE)} className="text-slate-400 hover:text-slate-600 px-4 py-2.5 text-sm font-medium transition">다시 시작</button>
+            <button onClick={() => setStatus(RecordingStatus.IDLE)} className="text-slate-400 hover:text-slate-600 px-4 py-2.5 text-sm font-medium transition underline underline-offset-4">새로 기록하기</button>
           </div>
 
           <SummaryCard summary={summary} />
