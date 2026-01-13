@@ -6,7 +6,8 @@ import SummaryCard from './components/SummaryCard';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import * as docx from 'docx';
-import FileSaver from 'file-saver';
+// file-saver의 ESM 문제를 피하기 위해 전체를 가져옵니다.
+import * as FileSaverNamespace from 'file-saver';
 
 const App: React.FC = () => {
   const [status, setStatus] = useState<RecordingStatus>(RecordingStatus.IDLE);
@@ -44,7 +45,7 @@ const App: React.FC = () => {
           if (typeof result === 'string') {
             resolve(result.split(',')[1]);
           } else {
-            reject(new Error("Failed to read audio file"));
+            reject(new Error("파일 읽기 실패"));
           }
         };
         reader.onerror = reject;
@@ -60,12 +61,12 @@ const App: React.FC = () => {
         setSummary(aiSummary);
         setStatus(RecordingStatus.FINISHED);
       } else {
-        alert("음성을 텍스트로 변환하지 못했습니다. 오디오 상태를 확인해 주세요.");
+        alert("음성이 감지되지 않았거나 변환에 실패했습니다.");
         setStatus(RecordingStatus.IDLE);
       }
     } catch (error: any) {
-      console.error("Process error:", error);
-      alert("AI 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+      console.error("Error:", error);
+      alert("AI 분석 중 오류가 발생했습니다.");
       setStatus(RecordingStatus.IDLE);
     }
   };
@@ -89,8 +90,7 @@ const App: React.FC = () => {
       recorder.start();
       setStatus(RecordingStatus.RECORDING);
     } catch (e) {
-      console.error("Mic error:", e);
-      alert("마이크 사용 권한이 필요합니다.");
+      alert("마이크 사용 권한을 허용해주세요.");
     }
   };
 
@@ -107,20 +107,15 @@ const App: React.FC = () => {
     
     setIsExporting('pdf');
     try {
-      const canvas = await html2canvas(element, { 
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff'
-      });
+      const canvas = await html2canvas(element, { scale: 2 });
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const imgWidth = 190;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
-      pdf.save(`${summary?.topic || 'lecture'}_summary.pdf`);
+      pdf.save(`${summary?.topic || '강의요약'}.pdf`);
     } catch (e) {
-      console.error("PDF fail", e);
-      alert("PDF 저장 중 오류가 발생했습니다.");
+      alert("PDF 저장 실패");
     }
     setIsExporting(null);
   };
@@ -133,31 +128,31 @@ const App: React.FC = () => {
         sections: [{
           children: [
             new docx.Paragraph({ text: summary.topic, heading: docx.HeadingLevel.HEADING_1, alignment: docx.AlignmentType.CENTER }),
-            new docx.Paragraph({ text: "핵심 요약", heading: docx.HeadingLevel.HEADING_2, spacing: { before: 400 } }),
+            new docx.Paragraph({ text: "핵심 요약", heading: docx.HeadingLevel.HEADING_2 }),
             ...summary.mainPoints.flatMap(p => [
-              new docx.Paragraph({ text: p.title, heading: docx.HeadingLevel.HEADING_3, spacing: { before: 200 } }),
+              new docx.Paragraph({ text: p.title, heading: docx.HeadingLevel.HEADING_3 }),
               ...p.details.map(d => new docx.Paragraph({ text: `- ${d}` }))
             ])
           ]
         }]
       });
       const blob = await docx.Packer.toBlob(doc);
-      // esm.sh bundle version can sometimes expose saveAs differently
-      if (typeof FileSaver === 'function') {
-        (FileSaver as any)(blob, `${summary.topic || 'lecture'}_summary.docx`);
-      } else if (FileSaver && (FileSaver as any).saveAs) {
-        (FileSaver as any).saveAs(blob, `${summary.topic || 'lecture'}_summary.docx`);
+      
+      // FileSaver를 가장 안전한 방식으로 호출하거나 폴백 사용
+      const saveAs = (FileSaverNamespace as any).saveAs || (FileSaverNamespace as any).default?.saveAs;
+      
+      if (saveAs) {
+        saveAs(blob, `${summary.topic || '강의요약'}.docx`);
       } else {
-        // Fallback for browsers
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${summary.topic || 'lecture'}_summary.docx`;
-        a.click();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${summary.topic || '강의요약'}.docx`;
+        link.click();
+        URL.revokeObjectURL(url);
       }
     } catch (e) {
-      console.error("Docs fail", e);
-      alert("Word 저장 중 오류가 발생했습니다.");
+      alert("Word 저장 실패");
     }
     setIsExporting(null);
   };
@@ -166,12 +161,10 @@ const App: React.FC = () => {
     <div className="max-w-4xl mx-auto px-4 py-12">
       <header className="text-center mb-12">
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-600 text-white mb-4 shadow-lg">
-          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
-          </svg>
+          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
         </div>
         <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">Lecture Lens</h1>
-        <p className="mt-2 text-slate-500 text-lg font-medium">AI 강의 녹음 및 스마트 요약 도구</p>
+        <p className="mt-2 text-slate-500 text-lg font-medium">AI가 요약하는 스마트 강의 노트</p>
       </header>
 
       <main className="min-h-[400px]">
@@ -196,7 +189,7 @@ const App: React.FC = () => {
           <div className="bg-white rounded-3xl p-16 shadow-inner border border-slate-200 text-center">
             <div className="w-4 h-4 bg-red-500 rounded-full recording-pulse mx-auto mb-6"></div>
             <div className="text-6xl font-mono font-bold text-slate-800 mb-10 tabular-nums">{formatTime(timer)}</div>
-            <button onClick={() => { if(window.confirm("녹음을 중단하고 AI 요약을 시작할까요?")) stopRecording(); }} className="bg-slate-900 text-white px-10 py-4 rounded-full font-bold text-lg hover:bg-slate-800 transition shadow-xl active:scale-95">
+            <button onClick={() => { if(confirm("녹음을 중단하고 분석할까요?")) stopRecording(); }} className="bg-slate-900 text-white px-10 py-4 rounded-full font-bold text-lg hover:bg-slate-800 transition shadow-xl active:scale-95">
               중단 및 AI 요약
             </button>
           </div>
@@ -205,16 +198,15 @@ const App: React.FC = () => {
         {status === RecordingStatus.PROCESSING && (
           <div className="text-center py-24 bg-white rounded-3xl border border-slate-200 shadow-sm">
             <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
-            <p className="text-2xl font-bold text-indigo-600 animate-pulse">Gemini AI가 강의를 분석 중입니다...</p>
-            <p className="text-slate-400 mt-2">잠시만 기다려 주세요.</p>
+            <p className="text-2xl font-bold text-indigo-600 animate-pulse">Gemini AI 분석 중...</p>
           </div>
         )}
 
         {status === RecordingStatus.FINISHED && summary && (
           <div className="space-y-8 animate-in fade-in duration-700">
             <div className="flex flex-wrap gap-3 justify-center sticky top-4 z-20 bg-slate-50/90 backdrop-blur-md py-4 rounded-2xl border border-slate-200 px-4 shadow-sm">
-              <button onClick={handleDownloadPDF} disabled={!!isExporting} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition active:scale-95">
-                {isExporting === 'pdf' ? 'PDF 생성 중...' : 'PDF 저장'}
+              <button onClick={handleDownloadPDF} disabled={!!isExporting} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-indigo-700 transition active:scale-95">
+                {isExporting === 'pdf' ? '생성 중...' : 'PDF 저장'}
               </button>
               <button onClick={handleDownloadDocs} disabled={!!isExporting} className="bg-white border border-slate-200 text-slate-700 px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-100 transition active:scale-95">
                 Word 저장
@@ -223,20 +215,7 @@ const App: React.FC = () => {
                 새 강의 기록
               </button>
             </div>
-
             <SummaryCard summary={summary} />
-
-            {transcription && (
-              <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm mb-12">
-                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                  <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h7"></path></svg>
-                  받아쓰기 전문
-                </h3>
-                <div className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap max-h-96 overflow-y-auto pr-4 scrollbar-thin">
-                  {transcription}
-                </div>
-              </div>
-            )}
           </div>
         )}
       </main>
