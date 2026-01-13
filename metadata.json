@@ -1,0 +1,7 @@
+{
+  "name": "강연 써머리 앱",
+  "description": "A real-time lecture recording and AI-powered summarization tool. Record your sessions to get instant transcriptions and structured summaries.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
